@@ -1,38 +1,65 @@
 clc;
 clear all;
 close all;
-% filename = 'M.csv';
-% M = csvread(filename);
-% csvwrite('M.txt',M)
-
-iter = 10; % number of dataset columns
-data_input = zeros(iter, 4*2 + 1); % 4 pilot and alpha in SEFDM
-data_output = zeros(iter, 4 + 4); % amplitude and doopler freq
+iter = 1000; % number of dataset columns
 fd = 10;
 frame_size = 16;
 L = 4;
 P = 4;
 bitrate = 1e9;
 t = (0:1/bitrate: (frame_size+L+P-1)/bitrate).';
-alpha = 1;
-F = SEFDM_Modulation(alpha,size(t,1));
+alpha_arr = [0.9,0.85,0.8,0.75,0.7];
 Tap_Number = 4;
-SNR = 100;
-for i =1:iter
-    Delay = zeros(1,4);
-    Doppler_Frequency = rand(4,1);
-    Amplitude = raylrnd(1,4,1);
-    data_output(i,:) = [Doppler_Frequency;Amplitude];
-    S = (randi([0,1],frame_size,1)*2-1) + 1i*(randi([0,1],frame_size,1)*2-1);
-    Sx = [S(end-3:end);S(1:6);ones(4,1);S(7:16)];  % 4 cp, 6 signal, 4 pilot, 10 signal
-    S_TX = conj(F) * Sx;
-    S_RX = channel(t,S_TX,Tap_Number,Amplitude,Doppler_Frequency,Delay);
-    Noisy_Signal = awgn(S_RX,SNR,'measured');
-    data_input(i,:) = [real(Noisy_Signal(11:14));imag(Noisy_Signal(11:14));alpha];
+SNR_max = 15;
+data_input_train = zeros(iter*size(alpha_arr,2), 4*2 + 1); % 4 pilot and alpha in SEFDM
+data_output_train = zeros(iter*size(alpha_arr,2), 4 + 4); % amplitude and doopler freq
+for j = 1:size(alpha_arr,2)
+    alpha = alpha_arr(j);
+    F = SEFDM_Modulation(alpha,size(t,1));
+    for i =1:iter
+        SNR = rand()*SNR_max+15;
+        Delay = zeros(1,4);
+        Doppler_Frequency = rand(4,1)*fd;
+        Amplitude = raylrnd(1,4,1);
+        data_output_train((j-1)*iter+i,:) = [Doppler_Frequency;Amplitude];
+        S = (randi([0,1],frame_size,1)*2-1) + 1i*(randi([0,1],frame_size,1)*2-1);
+        Sx = [S(end-3:end);S(1:6);ones(4,1);S(7:16)];  % 4 cp, 6 signal, 4 pilot, 10 signal
+        S_TX = conj(F) * Sx;
+        S_RX = channel(t,S_TX,Tap_Number,Amplitude,Doppler_Frequency,Delay);
+        Noisy_Signal = awgn(S_RX,SNR,'measured');
+        data_input_train((j-1)*iter+i,:) = [real(Noisy_Signal(11:14));imag(Noisy_Signal(11:14));alpha];
+    end
 end
+input_text = ["pilot1_r","pilot2_r","pilot3_r","pilot4_r",...
+              "pilot1_I","pilot2_I","pilot3_I","pilot4_I",...
+              "alpha"];
+output_text = ["Doppler_Freq_1","Doppler_Freq_2","Doppler_Freq_3","Doppler_Freq_4",...
+              "Amplitude_1","Amplitude_2","Amplitude_3","Amplitude_4"];   
+csvwrite('data_output_train.txt',data_output_train)
+csvwrite('data_input_train.txt',data_input_train)
 
-csvwrite('data_output.txt',data_output)
-csvwrite('data_input.txt',data_input)
+data_input_validation = zeros(iter*size(alpha_arr,2), 4*2 + 1);
+data_output_validation = zeros(iter*size(alpha_arr,2), 4 + 4);
+for j = 1:size(alpha_arr,2)
+    alpha = alpha_arr(j);
+    F = SEFDM_Modulation(alpha,size(t,1));
+    for i =1:iter
+        SNR = rand()*SNR_max+15;
+        Delay = zeros(1,4);
+        Doppler_Frequency = rand(4,1)*fd;
+        Amplitude = raylrnd(1,4,1);
+        data_output_validation((j-1)*iter+i,:) = [Doppler_Frequency;Amplitude];
+        S = (randi([0,1],frame_size,1)*2-1) + 1i*(randi([0,1],frame_size,1)*2-1);
+        Sx = [S(end-3:end);S(1:6);ones(4,1);S(7:16)];  % 4 cp, 6 signal, 4 pilot, 10 signal
+        S_TX = conj(F) * Sx;
+        S_RX = channel(t,S_TX,Tap_Number,Amplitude,Doppler_Frequency,Delay);
+        Noisy_Signal = awgn(S_RX,SNR,'measured');
+        data_input_validation((j-1)*iter+i,:) = [real(Noisy_Signal(11:14));imag(Noisy_Signal(11:14));alpha];
+    end
+end
+csvwrite('data_output_validation.txt',data_output_validation)
+csvwrite('data_input_validation.txt',data_input_validation)
+
 
 function F = SEFDM_Modulation(alpha,n)
     F = zeros(n,n);
